@@ -86,14 +86,18 @@ class Sound(object):
     """
     Class to hold data from a sound file
     """
-    EXTENSIONS = ['.m4a', '.ogg', '.mp3', '.oga']
+    NATIVE_FORMATS = [("Waveform Audio File Format", ('*.wav',))]
+    OTHER_FORMATS = [("Windows Media Audio", ('*.m4a',)),
+                     ("Ogg Vorbis", ('*.ogg', '*.oga')),
+                     ("MPEG-1/2 Audio Layer III", ('*.mp3',)),
+                     ('Free Lossless Audio Codec', ("*.flac",))]
 
     def __init__(self, filename=None, framerate=44100, sampwidth=2, nchannels=1, comptype='NONE',
                  compname='not compressed'):
         if filename is not None:
             self._filename = filename
             self.data, self.metadata, self.data_raw = Sound._read_sound(filename)
-            self.duration_sec = (self.metadata.nframes-1) / float(self.metadata.framerate)
+            self.duration_sec = (self.metadata.nframes - 1) / float(self.metadata.framerate)
         else:
             self._filename = None
             self.metadata = _wave_params(framerate=framerate, sampwidth=sampwidth, comptype=comptype,
@@ -116,13 +120,16 @@ class Sound(object):
 
     @staticmethod
     def _read_sound(filename):
+        # remove "*" for extension check
+        natives = [ext[1:] for fmt in Sound.NATIVE_FORMATS for ext in fmt[1]]
+        others = [ext[1:] for fmt in Sound.NATIVE_FORMATS for ext in fmt[1]]
         ext = os.path.splitext(filename)[1].lower()
-        if ext == '.wav':
+        if ext in natives:
             return Sound._read_wav(filename)
-        elif ext in Sound.EXTENSIONS:
+        elif ext in others:
             return Sound._read_other(filename)
         else:
-            raise Exception("unknown file type, not one of %s:  %s" % (Sound.EXTENSIONS, ext))
+            raise Exception("unknown file type, not one of %s:  %s" % (natives + others, ext))
 
     @staticmethod
     def _read_wav(filename):

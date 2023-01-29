@@ -1,4 +1,4 @@
-from sound import SoundPlayer, Sound
+from .sound import SoundPlayer, Sound
 import logging
 import time
 import matplotlib.pyplot as plt
@@ -39,6 +39,6 @@ def sound_test(file_name):
 
 if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO)
-    filename = "Aphelocoma_californica_-_California_Scrub_Jay_XC110976.wav"
+    filename = "Aphelocoma_californica_-_California_Scrub_Jay_-_XC110976.wav"
     sound_test(filename)
     print("Test complete.")
