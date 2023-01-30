@@ -5,81 +5,11 @@ import tempfile
 import logging
 import shutil
 import wave
-import pyaudio
 
 from collections import namedtuple
 
 # copied from wave.wave.py, not sure how to do this pythonically
 _wave_params = namedtuple('_wave_params', 'nchannels sampwidth framerate nframes comptype compname')
-
-
-class SoundPlayer(object):
-    def __init__(self, sample_width, frame_rate, channels, sample_generator, frames_per_buffer=None):
-        """
-        Open stream for playing.
-        :param sample_width:  bytes per frame
-        :param frame_rate:  Samples per second
-        :param channels: 1 or 2
-        :param sample_generator:  Function taking 1 int (n_samples) and returning that many samples
-        """
-        self._sample_width = sample_width
-        self._frame_rate = frame_rate
-        self._channels = channels
-        self._sample_gen = sample_generator
-        self._p = pyaudio.PyAudio()
-        self._buffer_size = frames_per_buffer if frames_per_buffer is not None else 1024 * 2
-        self._stream = None
-
-    @staticmethod
-    def from_sound(sound, sample_generator, frames_per_buffer=None):
-        """
-        Init player with params loaded from file.
-        :param sound: Sound object
-        :param sample_generator:  see __init__
-        :param frames_per_buffer:  see __init
-        :return: SoundPlayer
-        """
-        return SoundPlayer(sample_width=sound.metadata.sampwidth,
-                           frame_rate=sound.metadata.framerate,
-                           channels=sound.metadata.nchannels,
-                           sample_generator=sample_generator, frames_per_buffer=frames_per_buffer)
-
-    def start(self):
-        logging.info("Starting playback...")
-        self._stream = self._p.open(format=self._p.get_format_from_width(self._sample_width),
-                                    channels=self._channels,
-                                    rate=self._frame_rate,
-                                    output=True,
-                                    frames_per_buffer=self._buffer_size,
-                                    stream_callback=self._get_samples)
-
-    def _get_samples(self, in_data, frame_count, time_info, status):
-        """
-        (Pyaudio callback)
-        pyaudio wants more samples, so get them from the callback
-        :param in_data: pyaudio param
-        :param frame_count:
-        :param time_info: pyaudio param
-        :param status: pyaudio param
-        :return:  frame_count samples, or fewer if at the end of the sound, and the appropriate code
-        """
-        data = self._sample_gen(frame_count)
-        # If len(data) is less than requested frame_count, PyAudio automatically
-        # assumes the stream is finished, and the stream stops.
-
-        code = pyaudio.paContinue
-        if len(data) < frame_count:
-            self._stream = False
-            code = pyaudio.paComplete
-
-        return data, code
-
-    def stop(self):
-        self._stream.close()
-        self._stream = None
-
-    def shutdown(self):
-        self._p.terminate()
 
 
 class Sound(object):
@@ -116,7 +46,7 @@ class Sound(object):
         return np.mean(self.data, axis=0)
 
     def encode_samples(self, samples):
-        return Sound._convert_to_bytes(samples, self.data[0].dtype)
+        return convert_to_bytes(samples, self.data[0].dtype)
 
     @staticmethod
     def _read_sound(filename):
@@ -136,7 +66,7 @@ class Sound(object):
         with wave.open(filename, 'rb') as wav:
             wav_params = wav.getparams()
             data_raw = wav.readframes(wav_params.nframes)
-        data = Sound._convert_from_bytes(data_raw, wav_params)
+        data = convert_from_bytes(data_raw, wav_params)
         duration = wav_params.nframes / float(wav_params.framerate)
         logging.info("Read file:  %s (%.4f sec, %i Hz, %i channel(s))" % (filename, duration,
                                                                           wav_params.framerate,
@@ -157,31 +87,12 @@ class Sound(object):
         shutil.rmtree(temp_dir)
         return sound
 
-    @staticmethod
-    def _convert_from_bytes(data, wav_params):
-        # figure out data type
-        n_data = np.frombuffer(data, get_encoding_type(wav_params))
-        # separate interleaved channel data
-        n_data = [n_data[offset::wav_params.nchannels] for offset in range(wav_params.nchannels)]
-
-        return n_data
-
-    @staticmethod
-    def _convert_to_bytes(chan_float_data, data_type):
-        # interleave channel data
-        n_chan = len(chan_float_data)
-        data = np.zeros(n_chan * chan_float_data[0].size, dtype=data_type)
-        for i_chan in range(n_chan):
-            data[i_chan::n_chan] = chan_float_data[i_chan]
-
-        return data.tobytes()
-
     def set_data(self, channel_data):
         """
         :param channel_data:  list of numpy arrays
         """
         self.data = channel_data
-        self.data_raw = Sound._convert_to_bytes(self.data, get_encoding_type(self.metadata))
+        self.data_raw = convert_to_bytes(self.data, get_encoding_type(self.metadata))
         self.metadata = self.metadata._replace(nframes=channel_data[0].size)
         self.duration_sec = float(self.metadata.nframes) / self.metadata.framerate
 
@@ -203,7 +114,7 @@ class Sound(object):
 
         if data is not None:
             dtype = self.data[0].dtype
-            new_bytes = self._convert_to_bytes(data, dtype)
+            new_bytes = convert_to_bytes(data, dtype)
         else:
             new_bytes = data_raw
 
@@ -246,6 +157,31 @@ class Sound(object):
             image[y_values_low[x]:y_values_high[x] - 1, x, :] = color
 
 
+def convert_from_bytes(data, wav_params):
+    # figure out data type
+    n_data = np.frombuffer(data, get_encoding_type(wav_params))
+    # separate interleaved channel data
+    n_data = [n_data[offset::wav_params.nchannels] for offset in range(wav_params.nchannels)]
+
+    return n_data
+
+
+def convert_to_bytes(chan_float_data, data_type=None):
+    data_type = chan_float_data[0].dtype if data_type is None else data_type
+    # interleave channel data
+    n_chan = len(chan_float_data)
+    data = np.zeros(n_chan * chan_float_data[0].size, dtype=data_type)
+    for i_chan in range(n_chan):
+        data[i_chan::n_chan] = chan_float_data[i_chan]
+
+    return data.tobytes()
+
+
+ENCODING_TYPES_FROM_SAMPLE_WIDTH = {1: np.uint8,
+                  2: np.int16,
+                  4: np.int32}
+
+
 def get_encoding_type(wav_params):
     """
     Find numpy equivalent for different file formats
@@ -253,8 +189,6 @@ def get_encoding_type(wav_params):
     :return:  numpy dtype
     """
     try:
-        return {1: np.uint8,
-                2: np.int16,
-                4: np.int32}[wav_params.sampwidth]
+        return ENCODING_TYPES_FROM_SAMPLE_WIDTH[wav_params.sampwidth]
     except KeyError:
         raise Exception("Don't know data type for sample-width = %i." % (wav_params.sampwidth,))

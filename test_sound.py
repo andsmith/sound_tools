@@ -1,4 +1,5 @@
-from .sound import SoundPlayer, Sound
+from .sound import  Sound
+from .sound_player import SoundPlayer
 import logging
 import time
 import matplotlib.pyplot as plt
@@ -13,6 +14,7 @@ def sound_test(file_name):
     #plt.show()
     duration = sound.metadata.nframes / float(sound.metadata.framerate)
     logging.info("Read %.2f sec sound." % (duration,))
+    logging.info("Metadata:\n%s." % (sound.metadata,))
 
     position = [0]
     finished = [False]
@@ -28,6 +30,7 @@ def sound_test(file_name):
         position[0] = endpoint
         bytes = sound.encode_samples(samples)
         return bytes
+
     player = SoundPlayer.from_sound(sound, _make_samples, frames_per_buffer=buffer_size)
     player.start()
     while not finished[0]:
