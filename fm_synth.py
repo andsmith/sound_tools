@@ -4,7 +4,7 @@ See http://www.cs.cmu.edu/~music/icm-online/readings/fm-synthesis/index.html
 
 """
 import numpy as np
- 
+
 
 class FMSynthesizer(object):
     """
