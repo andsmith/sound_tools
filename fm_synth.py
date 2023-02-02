@@ -19,7 +19,7 @@ class FMSynthesizer(object):
                         'carrier_amp': carrier_init[1],
                         'mod_freq': modulation_init[0],
                         'mod_depth': modulation_init[1]}
-        self._new_params = self._params.copy()
+        self._new_params = self._params.copy()  # <- put new values here, keep old ones to interpolate to the new ones.
         self._carrier_phase, self._mod_phase = 0.0, 0.0
         self._update_lock = Lock()
 
@@ -37,20 +37,33 @@ class FMSynthesizer(object):
         with self._update_lock:
             self._new_params.update(updates)
 
-    def reset(self):
-        self._params = self._new_params.copy()
-        self._carrier_phase, self._mod_phase = 0.0, 0.0
+    def reset_state(self):
+        with self._update_lock:
+            self._params = self._new_params.copy() # <- apply now
+            self._carrier_phase, self._mod_phase = 0.0, 0.0
 
-    def get_samples(self, n, advance=True, encode_func=None):
+    def get_plot_samples(self, n):
+        """
+        Get samples without interrupting phase.
+        """
+        t = np.linspace(0, (n - 1) / self._rate, n)
+
+        modulation = self._new_params['mod_depth'] * np.sin(2 * np.pi * self._new_params['mod_freq'] * t)
+        samples = self._new_params['carrier_amp'] * np.sin(2 * np.pi * self._new_params['carrier_freq'] * t + modulation)
+        return samples
+
+    def get_samples(self, n, encode_func=None):
         """
         Get the next N samples and the time of sample n+1
         returns floats in [-1,1], or bytes
         """
         with self._update_lock:
+            # use these
             params = self._params
             new_params = self._new_params.copy()
-            if advance:
-                self._params = self._new_params.copy()
+
+            # but apply update now, to start remembering new changes
+            self._params = self._new_params.copy()
 
         mod_phase_increments = np.cumsum(
             np.hstack([0, np.linspace(2. * np.pi * params['mod_freq'] / self._rate,
@@ -65,9 +78,8 @@ class FMSynthesizer(object):
         modulation = np.sin(self._mod_phase + mod_phase_increments[:-1]) * depth
         samples = np.sin(self._carrier_phase + car_phase_increments[:-1] + modulation) * amp
 
-        if advance:
-            self._carrier_phase += car_phase_increments[-1]  # np.mod(car_phase_increments[-1], np.pi * 2.0)
-            self._mod_phase += mod_phase_increments[-1]  # np.mod(mod_phase_increments[-1], np.pi * 2.0)
+        self._carrier_phase += car_phase_increments[-1]  # np.mod(car_phase_increments[-1], np.pi * 2.0)
+        self._mod_phase += mod_phase_increments[-1]  # np.mod(mod_phase_increments[-1], np.pi * 2.0)
 
         if encode_func is not None:
             return encode_func(samples)
