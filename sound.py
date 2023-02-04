@@ -17,6 +17,7 @@ class Sound(object):
     Class to hold data from a sound file
     """
     NATIVE_FORMATS = [("Waveform Audio File Format", ('*.wav',))]
+
     OTHER_FORMATS = [("Windows Media Audio", ('*.m4a',)),
                      ("Ogg Vorbis", ('*.ogg', '*.oga')),
                      ("MPEG-1/2 Audio Layer III", ('*.mp3',)),
@@ -52,8 +53,9 @@ class Sound(object):
     def _read_sound(filename):
         # remove "*" for extension check
         natives = [ext[1:] for fmt in Sound.NATIVE_FORMATS for ext in fmt[1]]
-        others = [ext[1:] for fmt in Sound.NATIVE_FORMATS for ext in fmt[1]]
+        others = [ext[1:] for fmt in Sound.OTHER_FORMATS for ext in fmt[1]]
         ext = os.path.splitext(filename)[1].lower()
+
         if ext in natives:
             return Sound._read_wav(filename)
         elif ext in others:
