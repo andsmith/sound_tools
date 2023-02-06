@@ -5,7 +5,7 @@ from .sound import Sound
 
 
 def get_power_spectrum(data, frame_rate, resolution_hz=110.0, resolution_sec=0.0005, freq_range=None,
-                       max_stft_size=50000):
+                       max_stft_size=25000):
     """
     Get a short-time fft (i.e. with a sliding window) of a signal.
 
@@ -19,22 +19,39 @@ def get_power_spectrum(data, frame_rate, resolution_hz=110.0, resolution_sec=0.0
     :param frame_rate:  frames per sec
     :param resolution_hz:  Spectrum will bin frequencies in bins of this size.
     :param resolution_sec:  Window will slide along in steps of this duration.
-    :param freq_range:  return frequencies in this band (float low, float high), or None for all
+    :param freq_range:  return frequencies in this band (float low, float high), None = (0, 2/frame_rate)
     :param max_stft_size:  If data.size > max_stft_size, do calculation piecewise (avoid memory blow-up)
 
     :return: complex - f x t array of z values (fft-result), where f and t are:
-             floats - array of f frequency bins (bin centers)
+             floats - array of f frequency bins (bin centers, disregarding DC component)
              floats - array of t window times (window centers)
     """
     frame_rate = float(frame_rate)
 
+    # STFT params
+    step_size = int(resolution_sec * frame_rate)
     window_size = int(frame_rate / resolution_hz)
     window_size += (window_size % 2)  # make even
-    padding_samples = window_size // 2
-    padding_duration_sec = padding_samples / frame_rate
-    step_size = int(resolution_sec * frame_rate)
-
     overlap = window_size - step_size
+
+    # Block-wise param, dispose of invalid data
+    padding_samples = window_size // 2
+
+    def prune_frequencies(freq, z_vals):
+        f_range = np.sum(freq < freq_range[0]), np.sum(freq < freq_range[1])
+        return freq[f_range[0]:f_range[1]], z_vals[f_range[0]:f_range[1], :]
+
+    if padding_samples * 3 > data.size:
+        f, t, z = stft(data,
+                       fs=frame_rate,
+                       nperseg=window_size,
+                       noverlap=overlap,
+                       padded=True, boundary=None)
+        f,z = prune_frequencies(f,z)
+        return z,f,t
+
+    padding_duration_sec = padding_samples / frame_rate
+    freq_range = freq_range if freq_range is not None else (0., 2. / frame_rate)
 
     # make sure chunk_size has whole number of windows
     chunk_size = max_stft_size
@@ -49,9 +66,6 @@ def get_power_spectrum(data, frame_rate, resolution_hz=110.0, resolution_sec=0.0
     window_center_inds = window_center_inds[window_center_inds <= data.size - padding_samples]
     window_center_times = window_center_inds / frame_rate
 
-    # the frequency bin boundaries are just integer multiples of the resolution_hz
-    freq_bin_center_offset = resolution_hz / 2.
-
     def get_chunk_spectrum(w_start, w_end):  # index into window_center_*
         """
         Get a (time) section of the spectrogram.  Remove unwanted frequencies.
@@ -59,7 +73,7 @@ def get_power_spectrum(data, frame_rate, resolution_hz=110.0, resolution_sec=0.0
         :param w_start:  into window_center_inds
         :param w_end:  into window_center_inds
         :return: array of f floats - frequency bin (centers)
-                 array of t floats - time bin (centers), where t is last_ind - first_ind
+                 array of t floats - bin centers, as returned by scipy.fft
                  f x t array of complex - the z values
         """
 
@@ -70,15 +84,9 @@ def get_power_spectrum(data, frame_rate, resolution_hz=110.0, resolution_sec=0.0
                        nperseg=window_size,
                        noverlap=overlap,
                        padded=True, boundary=None)
-        f += freq_bin_center_offset
         assert (t.size - 1 == (w_end - w_start))
 
-        # prune frequencies
-        if freq_range is not None:
-            f_range = np.sum(f < freq_range[0]), np.sum(f < freq_range[1])
-            f = f[f_range[0]:f_range[1]]
-            z = z[f_range[0]:f_range[1], :]
-
+        f, z = prune_frequencies(f, z)
         return f, t, z
 
     n_windows_per_chunk = int(np.floor(chunk_size - window_size) / step_size)
@@ -101,7 +109,6 @@ def get_power_spectrum(data, frame_rate, resolution_hz=110.0, resolution_sec=0.0
 
         if next_w_ind >= window_center_inds.size:
             break
-
 
     frequencies = freqs
     z_values = np.hstack(z_vals)
