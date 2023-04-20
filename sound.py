@@ -4,9 +4,11 @@ import subprocess
 import tempfile
 import logging
 import shutil
-import wave
-
+import sound_tools.new_wave as wave
+import re
 from collections import namedtuple
+from sound_tools.pcm_data import (DEFAULT_ENCODING_FOR_SAMPLE_WIDTH, NUMPY_TYPES_FOR_PCM_DATA_TYPE, get_encoding_type,
+                                  convert_to_bytes, convert_from_bytes)
 
 # copied from wave.wave.py, not sure how to do this pythonically
 _wave_params = namedtuple('_wave_params', 'nchannels sampwidth framerate nframes comptype compname')
@@ -27,13 +29,14 @@ class Sound(object):
                  compname='not compressed'):
         if filename is not None:
             self._filename = filename
-            self.data, self.metadata, self.data_raw = Sound._read_sound(filename)
+            self.data, self.metadata, self.data_raw, self.encoding = Sound._read_sound(filename)
             self.duration_sec = (self.metadata.nframes - 1) / float(self.metadata.framerate)
         else:
             self._filename = None
+            self.encoding = DEFAULT_ENCODING_FOR_SAMPLE_WIDTH[sampwidth]
             self.metadata = _wave_params(framerate=framerate, sampwidth=sampwidth, comptype=comptype,
                                          compname=compname, nchannels=nchannels, nframes=0)
-            self.data = np.array([], dtype=get_encoding_type(self.metadata))
+            self.data = np.array([], dtype=NUMPY_TYPES_FOR_PCM_DATA_TYPE[self.encoding])
             self.data_raw = bytes([])
             self._duration_sec = 0.
 
@@ -47,7 +50,7 @@ class Sound(object):
         return np.mean(self.data, axis=0)
 
     def encode_samples(self, samples):
-        return convert_to_bytes(samples, self.data[0].dtype)
+        return convert_to_bytes(samples, self.encoding)
 
     @staticmethod
     def _read_sound(filename):
@@ -65,16 +68,16 @@ class Sound(object):
 
     @staticmethod
     def _read_wav(filename):
+        encoding = get_encoding_type(filename)
         with wave.open(filename, 'rb') as wav:
             wav_params = wav.getparams()
             data_raw = wav.readframes(wav_params.nframes)
-        data = convert_from_bytes(data_raw, wav_params)
+        data = convert_from_bytes(data_raw, encoding, wav_params.nchannels)
         duration = wav_params.nframes / float(wav_params.framerate)
         logging.info("Read file:  %s (%.4f sec, %i Hz, %i channel(s))" % (filename, duration,
                                                                           wav_params.framerate,
                                                                           wav_params.nchannels))
-
-        return data, wav_params, data_raw
+        return data, wav_params, data_raw, encoding
 
     @staticmethod
     def _read_other(filename):
@@ -94,7 +97,7 @@ class Sound(object):
         :param channel_data:  list of numpy arrays
         """
         self.data = channel_data
-        self.data_raw = convert_to_bytes(self.data, get_encoding_type(self.metadata))
+        self.data_raw = convert_to_bytes(self.data, self.encoding)
         self.metadata = self.metadata._replace(nframes=channel_data[0].size)
         self.duration_sec = float(self.metadata.nframes) / self.metadata.framerate
 
@@ -115,9 +118,10 @@ class Sound(object):
             raise Exception("data_raw must be bytes array")
 
         if data is not None:
-            dtype = self.data[0].dtype
-            new_bytes = convert_to_bytes(data, dtype)
+            new_bytes = convert_to_bytes(data, self.encoding)
         else:
+            if data_raw is None:
+                raise Exception("Need data or data_raw to not be None.")
             new_bytes = data_raw
 
         n_frames = int(len(new_bytes) / self.metadata.sampwidth)
@@ -157,40 +161,3 @@ class Sound(object):
 
         for x in range(bbox['left'], bbox['right']):
             image[y_values_low[x]:y_values_high[x] - 1, x, :] = color
-
-
-def convert_from_bytes(data, wav_params):
-    # figure out data type
-    n_data = np.frombuffer(data, get_encoding_type(wav_params))
-    # separate interleaved channel data
-    n_data = [n_data[offset::wav_params.nchannels] for offset in range(wav_params.nchannels)]
-
-    return n_data
-
-
-def convert_to_bytes(chan_float_data, data_type=None):
-    data_type = chan_float_data[0].dtype if data_type is None else data_type
-    # interleave channel data
-    n_chan = len(chan_float_data)
-    data = np.zeros(n_chan * chan_float_data[0].size, dtype=data_type)
-    for i_chan in range(n_chan):
-        data[i_chan::n_chan] = chan_float_data[i_chan]
-
-    return data.tobytes()
-
-
-ENCODING_TYPES_FROM_SAMPLE_WIDTH = {1: np.uint8,
-                  2: np.int16,
-                  4: np.int32}
-
-
-def get_encoding_type(wav_params):
-    """
-    Find numpy equivalent for different file formats
-    :param wav_params:  metadata
-    :return:  numpy dtype
-    """
-    try:
-        return ENCODING_TYPES_FROM_SAMPLE_WIDTH[wav_params.sampwidth]
-    except KeyError:
-        raise Exception("Don't know data type for sample-width = %i." % (wav_params.sampwidth,))
