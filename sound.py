@@ -23,6 +23,7 @@ class Sound(object):
     OTHER_FORMATS = [("Windows Media Audio", ('*.m4a',)),
                      ("Ogg Vorbis", ('*.ogg', '*.oga')),
                      ("MPEG-1/2 Audio Layer III", ('*.mp3',)),
+                     ("Advanced Audio Coding", ('*.aac', )),
                      ('Free Lossless Audio Codec', ("*.flac",))]
 
     def __init__(self, filename=None, framerate=44100, sampwidth=2, nchannels=1, comptype='NONE',
