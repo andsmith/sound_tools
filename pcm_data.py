@@ -32,7 +32,7 @@ import numpy as np
 from construct import (Int8un, Int8sn, Int16ub, Int16ul, Int16sb, Int16sl, Int24ub, Int24ul, Int24sb, Int24sl,
                        Int32ub, Int32ul, Int32sb, Int32sl, Float32b, Float32l, Float64b, Float64l, Array, BytesInteger)
 
-# need one for everything in prev dict
+# For each of the above types, what kind of ndarray should the values be stored in?
 NUMPY_TYPES_FOR_PCM_DATA_TYPE = {'s8': np.int8,
                                  's16le': np.int16,
                                  's16be': np.int16,
@@ -53,18 +53,19 @@ NUMPY_TYPES_FOR_PCM_DATA_TYPE = {'s8': np.int8,
                                  'f64le': np.float64,
                                  }
 
+# What is the data type for each PCM encoding string?
 CONSTRUCT_TYPES_FOR_PCM_DATA_TYPE = {'s8': Int8sn,
                                      's16le': Int16sl,
                                      's16be': Int16sb,
-                                     's24le': BytesInteger(24, swapped=True),
-                                     's24be': BytesInteger(24, swapped=False),
+                                     's24le': BytesInteger(3, swapped=True, signed=True),
+                                     's24be': BytesInteger(3, swapped=False, signed=True),
                                      's32le': Int32sl,
                                      's32be': Int32sb,
                                      'u8': Int8un,
                                      'u16le': Int16ul,
                                      'u16be': Int16ub,
-                                     'u24le': BytesInteger(24, swapped=True),
-                                     'u24be': BytesInteger(24, swapped=False),
+                                     'u24le': BytesInteger(3, swapped=True),
+                                     'u24be': BytesInteger(3, swapped=False),
                                      'u32le': Int32ul,
                                      'u32be': Int32ub,
                                      'f32be': Float32b,
@@ -117,6 +118,7 @@ def _bytes_to_numpy(b, encoding):
     n = int(len(b) / SAMPLE_WIDTHS[encoding])
     parser = Array(n, CONSTRUCT_TYPES_FOR_PCM_DATA_TYPE[encoding])
     values = parser.parse(b)
+
     return np.array(values)
 
 
