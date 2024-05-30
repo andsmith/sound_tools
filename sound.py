@@ -70,10 +70,12 @@ class Sound(object):
     @staticmethod
     def _read_wav(filename):
         encoding = get_encoding_type(filename)
+        logging.info("Reading WAV file data:  %s" % (filename, ))
         with wave.open(filename, 'rb') as wav:
             wav_params = wav.getparams()
             data_raw = wav.readframes(wav_params.nframes)
         data = convert_from_bytes(data_raw, encoding, wav_params.nchannels)
+        logging.info("... read %i channels, each with %i bytes of sound data." % (len(data),len(data[0]) ))
         duration = wav_params.nframes / float(wav_params.framerate)
         logging.info("Read file:  %s (%.4f sec, %i Hz, %i channel(s))" % (filename, duration,
                                                                           wav_params.framerate,
