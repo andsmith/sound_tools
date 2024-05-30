@@ -74,6 +74,8 @@ CONSTRUCT_TYPES_FOR_PCM_DATA_TYPE = {'s8': Int8sn,
                                      'f64le': Float64l,
                                      }
 
+CONSTRUCT_TYPES_NEEDING_LIST_CONV = ['s24le', 's24be', 'u24le', 'u24be']
+
 SAMPLE_WIDTHS = {'s8': 1, 'u8': 1,
                  's16le': 2, 's16be': 2,
                  's24le': 3, 's24be': 3,
@@ -140,11 +142,12 @@ def _numpy_to_bytes(a, encoding):
     :return: byte array
     """
     encoder = Array(a.size, CONSTRUCT_TYPES_FOR_PCM_DATA_TYPE[encoding])
-    bytes = encoder.build(a)
-    return bytes
 
-
-    return 0
+    if encoding in CONSTRUCT_TYPES_NEEDING_LIST_CONV:
+        byte_vals = encoder.build(a.tolist())  # bug in construct.BytesInteger?
+    else:
+        byte_vals = encoder.build(a)
+    return byte_vals
 
 
 def convert_to_bytes(chan_float_data, encoding):
