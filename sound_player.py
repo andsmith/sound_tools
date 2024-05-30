@@ -1,7 +1,7 @@
 import logging
 import pyaudio
 import numpy as np
-from .pcm_data import DEFAULT_ENCODING_FOR_SAMPLE_WIDTH, convert_to_bytes
+from .pcm_data import DEFAULT_ENCODING_FOR_SAMPLE_WIDTH, convert_to_bytes, NUMPY_TYPES_FOR_PCM_DATA_TYPE
 
 
 def get_dtype_range(data_type):
@@ -14,17 +14,17 @@ class Encoder(object):
     """
 
     def __init__(self, sample_width):
+        #import ipdb; ipdb.set_trace()
         self._encoding = DEFAULT_ENCODING_FOR_SAMPLE_WIDTH[sample_width]
-        dtype = DEFAULT_ENCODING_FOR_SAMPLE_WIDTH[self._encoding]
-        self._sample_range = get_dtype_range(dtype)
+        self._dtype = NUMPY_TYPES_FOR_PCM_DATA_TYPE[self._encoding]
+        self._sample_range = get_dtype_range(self._dtype)
         self._sample_span = self._sample_range[1] - self._sample_range[0]
 
     def encode(self, channel_data):
         """
         floats in [-1, 1] -> dtypes in [dtype min, dtype max]
         """
-        dtype = DEFAULT_ENCODING_FOR_SAMPLE_WIDTH[self._encoding]
-        samples = [((1 + chan) / 2 * self._sample_span + self._sample_range[0]).astype(dtype)
+        samples = [((1 + chan) / 2 * self._sample_span + self._sample_range[0]).astype(self._dtype)
                    for chan in channel_data]
         return convert_to_bytes(samples, encoding=self._encoding)
 
