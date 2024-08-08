@@ -41,6 +41,20 @@ class Sound(object):
             self.data_raw = bytes([])
             self._duration_sec = 0.
 
+    @staticmethod
+    def from_modified_data(sound_orig, new_samples):
+        """
+        Create a new Sound object from a modified version of the original sound.
+        :param sound_orig:  original Sound object
+        :param new_samples:  list of numpy arrays, one for each channel
+        :return:  new Sound object
+        """
+        new_sound = Sound()
+        new_sound.metadata = sound_orig.metadata
+        new_sound.encoding = sound_orig.encoding
+        new_sound.set_data(new_samples)
+        return new_sound    
+
     def get_mono_data(self):
         """
         Avg of all channels.
