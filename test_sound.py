@@ -5,13 +5,13 @@ import time
 import matplotlib.pyplot as plt
 import pyaudio
 
-
+import os
 def sound_test(file_name):
     sound = Sound(file_name)
     data = sound.data[0]
-    #print(data.dtype)
-    #plt.plot(data[44100 * 4:44100 * 5])
-    #plt.show()
+    print(data.dtype)
+    plt.plot(data)
+    plt.show()
     duration = sound.metadata.nframes / float(sound.metadata.framerate)
     logging.info("Read %.2f sec sound." % (duration,))
     logging.info("Metadata:\n%s." % (sound.metadata,))
@@ -29,6 +29,8 @@ def sound_test(file_name):
         samples = data[position[0]:endpoint]
         position[0] = endpoint
         bytes = sound.encode_samples(samples)
+        plt.plot(bytes)
+        plt.show()
         return bytes
 
     player = SoundPlayer.from_sound(sound, _make_samples, frames_per_buffer=buffer_size)
@@ -42,6 +44,13 @@ def sound_test(file_name):
 
 if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO)
-    filename = "Aphelocoma_californica_-_California_Scrub_Jay_-_XC110976.wav"
+    import sys
+    if len(sys.argv) > 1:
+        filename = "sounds\Mimus_longicaudatus_-_Long_tailed_Mockingbird.wav"
+    else:   
+        filename = "sounds\Aphelocoma_californica_-_California_Scrub_Jay_XC110976.wav"
+
+    print(os.getcwd())
+    print(os.path.exists(filename))
     sound_test(filename)
     print("Test complete.")
